@@ -1,39 +1,62 @@
 import streamlit as st
-from langchain.tools import tool
 from tavily import TavilyClient
-
-# ======================
-# API KEY
-# ======================
+import requests
+from bs4 import BeautifulSoup
 
 TAVILY_API_KEY = st.secrets.get("TAVILY_API_KEY")
-
-if not TAVILY_API_KEY:
-    raise ValueError("TAVILY_API_KEY missing")
-
 tavily = TavilyClient(api_key=TAVILY_API_KEY)
 
 # ======================
-# TOOLS
+# SEARCH
 # ======================
 
-@tool
-def web_search(query: str) -> str:
-    """Search the web and return results."""
-    try:
-        res = tavily.search(query=query, max_results=5)
-        results = []
+def web_search(query: str):
+    res = tavily.search(query=query, max_results=5)
 
-        for r in res.get("results", []):
-            results.append(f"{r['title']}\n{r['content']}\n{r['url']}")
+    results = []
+    urls = []
 
-        return "\n\n".join(results)
+    for r in res.get("results", []):
+        results.append(r["content"])
+        urls.append(r["url"])
 
-    except Exception as e:
-        return f"Error: {e}"
+    return {"content": "\n".join(results), "urls": urls}
 
+# ======================
+# SCRAPE
+# ======================
 
-@tool
-def scrape_url(data: str) -> str:
-    """Process text (temporary reader)."""
-    return data[:3000]
+def scrape_urls(urls):
+    all_text = ""
+
+    for url in urls[:3]:
+        try:
+            res = requests.get(url, timeout=10)
+            soup = BeautifulSoup(res.text, "html.parser")
+
+            for s in soup(["script", "style"]):
+                s.extract()
+
+            text = soup.get_text()
+            clean = "\n".join([t.strip() for t in text.splitlines() if t.strip()])
+
+            all_text += clean[:1000] + "\n\n"
+
+        except:
+            continue
+
+    return all_text
+
+# ======================
+# IMAGE (Unsplash)
+# ======================
+
+def image_search(query):
+    return [f"https://source.unsplash.com/featured/?{query}"]
+
+# ======================
+# VIDEO (YouTube)
+# ======================
+
+def video_search(query):
+    return f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
