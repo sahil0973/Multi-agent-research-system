@@ -1,94 +1,123 @@
 import streamlit as st
-from langchain.agents import create_agent
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-
-# 🔁 Choose: "groq" | "gemini"
-PROVIDER = "groq"
-
-# ======================
-# LLM SETUP
-# ======================
-
-if PROVIDER == "groq":
-    from langchain_groq import ChatGroq
-
-    llm = ChatGroq(
-        model="llama3-70b-8192",
-        temperature=0,
-        api_key=st.secrets["GROQ_API_KEY"]
-    )
-
-elif PROVIDER == "gemini":
-    from langchain_google_genai import ChatGoogleGenerativeAI
-
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash",
-        temperature=0,
-        google_api_key=st.secrets["GOOGLE_API_KEY"]
-    )
-
-# ======================
-# TOOLS
-# ======================
-
+from langchain_groq import ChatGroq
+from langchain.prompts import ChatPromptTemplate
+from langchain.chains import LLMChain
+from langchain.agents import initialize_agent, AgentType
 from tools import web_search, scrape_url
 
 # ======================
-# AGENTS
+# LLM CONFIG (FIXED)
+# ======================
+
+def get_llm():
+    return ChatGroq(
+        groq_api_key=st.secrets.get("GROQ_API_KEY"),
+        model_name="llama3-70b-8192",   # ✅ stable model
+        temperature=0.3,
+        max_tokens=2048
+    )
+
+# ======================
+# SEARCH AGENT
 # ======================
 
 def build_search_agent():
-    return create_agent(
-        model=llm,
-        tools=[web_search],
-        system_prompt="""
-Find 3–5 reliable sources.
-Return URLs with short descriptions.
-Avoid repetition.
-"""
+    llm = get_llm()
+
+    tools = [web_search]
+
+    agent = initialize_agent(
+        tools=tools,
+        llm=llm,
+        agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+        verbose=True
     )
+
+    return agent
+
+
+# ======================
+# READER AGENT
+# ======================
 
 def build_reader_agent():
-    return create_agent(
-        model=llm,
-        tools=[scrape_url],
-        system_prompt="""
-Extract key insights from URL.
-Keep concise and factual.
-"""
+    llm = get_llm()
+
+    tools = [scrape_url]
+
+    agent = initialize_agent(
+        tools=tools,
+        llm=llm,
+        agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+        verbose=True
     )
 
-# ======================
-# WRITER
-# ======================
+    return agent
 
-writer_prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are a research writer."),
-    ("human", """Topic: {topic}
-
-Research:
-{research}
-
-Write:
-- Introduction
-- Key Findings
-- Conclusion
-- Sources"""),
-])
-
-writer_chain = writer_prompt | llm | StrOutputParser()
 
 # ======================
-# CRITIC
+# WRITER CHAIN
 # ======================
 
-critic_prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are a strict critic."),
-    ("human", """{report}
+def build_writer_chain():
+    llm = get_llm()
+
+    prompt = ChatPromptTemplate.from_template("""
+You are a professional research writer.
+
+Using the following gathered information, write a well-structured research report.
+
+Topic:
+{topic}
+
+Information:
+{research_data}
+
+Requirements:
+- Clear introduction
+- Detailed explanation
+- Use headings
+- Provide insights
+- Conclusion at end
+""")
+
+    chain = LLMChain(
+        llm=llm,
+        prompt=prompt
+    )
+
+    return chain
+
+
+# ======================
+# CRITIC CHAIN
+# ======================
+
+def build_critic_chain():
+    llm = get_llm()
+
+    prompt = ChatPromptTemplate.from_template("""
+You are a strict research critic.
+
+Review the following report:
+
+{report}
+
+Evaluate on:
+- Accuracy
+- Clarity
+- Depth
+- Structure
 
 Give:
-Score, strengths, weaknesses, verdict"""),
-])
+1. Score out of 10
+2. Improvements
+3. Final verdict
+""")
 
-critic_chain = critic_prompt | llm | StrOutputParser()
+    chain = LLMChain(
+        llm=llm,
+        prompt=prompt
+    )
+
+    return chain
