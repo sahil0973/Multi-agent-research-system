@@ -2,48 +2,66 @@ import streamlit as st
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from tools import web_search, scrape_url
+from tools import web_search, scrape_urls, image_search, video_search
 
 # ======================
-# LLM CONFIG (LATEST WORKING)
+# LLM
 # ======================
 
 def get_llm():
-    api_key = st.secrets.get("GROQ_API_KEY")
-
-    if not api_key:
-        raise ValueError("GROQ_API_KEY missing")
-
     return ChatGroq(
-        groq_api_key=api_key,
-        model_name="llama-3.1-8b-instant",  # ✅ CURRENT WORKING MODEL
+        groq_api_key=st.secrets.get("GROQ_API_KEY"),
+        model_name="llama-3.1-8b-instant",
         temperature=0.3,
-        max_tokens=1024  # keep safe to avoid overflow
+        max_tokens=1024
     )
 
 llm = get_llm()
 
 # ======================
-# SEARCH
+# FIELD DETECTION
 # ======================
 
-def run_search(topic: str) -> str:
-    query = f"Find detailed, recent, reliable information about: {topic}"
-    return web_search.invoke(query)
+field_prompt = ChatPromptTemplate.from_template("""
+Classify the topic into one field:
+AI, Technology, Physics, Biology, Medicine, Finance, Education, Environment, Other
+
+Topic: {topic}
+
+Return only the field name.
+""")
+
+field_chain = field_prompt | llm | StrOutputParser()
+
+def detect_field(topic):
+    return field_chain.invoke({"topic": topic}).strip()
 
 # ======================
-# READER
+# PIPELINE
 # ======================
 
-def run_reader(data: str) -> str:
-    return scrape_url.invoke(data)
+def run_search(topic):
+    return web_search(topic)
+
+def run_reader(search_data):
+    urls = search_data["urls"]
+    content = scrape_urls(urls)
+    return content, urls
+
+def run_images(topic):
+    return image_search(topic)
+
+def run_videos(topic):
+    return video_search(topic)
 
 # ======================
 # WRITER
 # ======================
 
 writer_prompt = ChatPromptTemplate.from_template("""
-You are a professional research writer.
+You are an expert in {field}.
+
+Write a professional research report.
 
 Topic:
 {topic}
@@ -51,12 +69,13 @@ Topic:
 Research Data:
 {research_data}
 
-Write a structured report:
-- Introduction
-- Key concepts
-- Deep explanation
+Instructions:
+- Domain-specific explanation
+- Clear structure
 - Insights
 - Conclusion
+
+Add "Sources" section.
 """)
 
 writer_chain = writer_prompt | llm | StrOutputParser()
@@ -66,8 +85,6 @@ writer_chain = writer_prompt | llm | StrOutputParser()
 # ======================
 
 critic_prompt = ChatPromptTemplate.from_template("""
-You are a strict research critic.
-
 Review the report:
 
 {report}
@@ -78,10 +95,7 @@ Evaluate:
 - Depth
 - Structure
 
-Provide:
-1. Score out of 10
-2. Improvements
-3. Final verdict
+Give score /10 and improvements.
 """)
 
 critic_chain = critic_prompt | llm | StrOutputParser()
