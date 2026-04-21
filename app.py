@@ -2,76 +2,86 @@ import streamlit as st
 import traceback
 
 from agents import (
-    run_search,
-    run_reader,
-    writer_chain,
-    critic_chain
+    run_search, run_reader,
+    writer_chain, critic_chain,
+    run_images, run_videos,
+    detect_field
 )
 
-# ======================
-# CONFIG
-# ======================
+st.set_page_config(page_title="ResearchMind Pro", page_icon="🔬", layout="wide")
 
-st.set_page_config(page_title="ResearchMind", page_icon="🔬")
+st.title("🔬 ResearchMind Pro")
+st.caption("AI Research Engine with visuals, sources & insights")
 
-st.title("🔬 ResearchMind")
-st.caption("Fast Multi-Step AI Research System")
+def safe(text, n=2000):
+    return text[:n] if text else ""
 
-# ======================
-# HELPER
-# ======================
+topic = st.text_input("Ask anything...")
 
-def safe_text(text, limit=2000):
-    if not text:
-        return ""
-    return text[:limit]
-
-# ======================
-# INPUT
-# ======================
-
-topic = st.text_input("Enter Topic")
-
-# ======================
-# RUN PIPELINE
-# ======================
-
-if st.button("Run") and topic:
+if st.button("🚀 Run") and topic:
 
     try:
-        # -------- SEARCH --------
+        # FIELD
+        st.info("🧠 Detecting field...")
+        field = detect_field(topic)
+        st.success(f"📌 Field: {field}")
+
+        # SEARCH
         st.info("🔍 Searching...")
-        search_result = run_search(topic)
-        st.success("Search Done")
+        search_data = run_search(topic)
 
-        # -------- READER --------
-        st.info("📄 Processing...")
-        reader_result = run_reader(safe_text(search_result, 1000))
-        st.success("Processing Done")
+        # IMAGES
+        images = run_images(topic)
 
-        # -------- WRITER --------
+        # VIDEOS
+        video = run_videos(topic)
+
+        # SCRAPE
+        st.info("📄 Extracting...")
+        reader_text, urls = run_reader(search_data)
+
+        # UI PANEL
+        col1, col2 = st.columns([2,1])
+
+        with col1:
+            if images:
+                st.image(images[0], use_container_width=True)
+
+        with col2:
+            st.markdown("### 🎥 Video")
+            st.markdown(f"[Watch]({video})")
+
+        # SOURCES
+        with st.expander("🔗 Sources"):
+            for u in urls:
+                st.write(u)
+
+        # REPORT
         st.info("✍️ Writing...")
 
         report = writer_chain.invoke({
             "topic": topic,
-            "research_data": safe_text(reader_result, 2000)
+            "research_data": safe(reader_text),
+            "field": field
         })
 
         st.subheader("📘 Report")
         st.write(report)
 
-        # -------- CRITIC --------
+        st.download_button("⬇ Download", report)
+
+        # REVIEW
         st.info("🧠 Reviewing...")
 
         review = critic_chain.invoke({
-            "report": safe_text(report, 2000)
+            "report": safe(report)
         })
 
         st.subheader("📊 Review")
         st.write(review)
 
-        st.success("✅ Completed")
+        st.success("✅ Done")
 
     except Exception:
-        st.error("❌ Error occurred")
+        st.error("❌ Error")
         st.code(traceback.format_exc())
