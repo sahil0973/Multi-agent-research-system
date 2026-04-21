@@ -5,7 +5,7 @@ from langchain_core.output_parsers import StrOutputParser
 from tools import web_search, scrape_url
 
 # ======================
-# LLM CONFIG
+# LLM CONFIG (UPDATED)
 # ======================
 
 def get_llm():
@@ -13,9 +13,10 @@ def get_llm():
     if not api_key:
         raise ValueError("GROQ_API_KEY missing")
 
+    # ✅ Use currently supported model
     return ChatGroq(
         groq_api_key=api_key,
-        model_name="mixtral-8x7b-32768",
+        model_name="llama3-8b-8192",
         temperature=0.3
     )
 
@@ -26,7 +27,7 @@ llm = get_llm()
 # ======================
 
 def run_search(topic: str) -> str:
-    query = f"Find detailed, recent information about: {topic}"
+    query = f"Find detailed, recent, reliable information about: {topic}"
     return web_search.invoke(query)
 
 # ======================
@@ -64,7 +65,7 @@ writer_chain = writer_prompt | llm | StrOutputParser()
 # ======================
 
 critic_prompt = ChatPromptTemplate.from_template("""
-You are a strict critic.
+You are a strict research critic.
 
 Review the report:
 
