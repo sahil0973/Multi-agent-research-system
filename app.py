@@ -3,16 +3,27 @@ import traceback
 import time
 
 from agents import (
-    run_search, run_reader,
-    writer_chain, critic_chain,
-    run_images, run_videos,
-    detect_field, chat_chain
+    run_search,
+    run_reader,
+    writer_chain,
+    critic_chain,
+    run_images,
+    run_videos,
+    detect_field
 )
 
-st.set_page_config(page_title="ResearchMind AI", page_icon="🧠", layout="wide")
+# ======================
+# CONFIG
+# ======================
+
+st.set_page_config(
+    page_title="ResearchMind AI",
+    page_icon="🧠",
+    layout="wide"
+)
 
 # ======================
-# ADVANCED CSS
+# STYLE
 # ======================
 
 st.markdown("""
@@ -21,16 +32,9 @@ body {
     background-color: #0e1117;
     color: white;
 }
-.chat-card {
-    background: #1c1f26;
-    padding: 15px;
+.stChatMessage {
     border-radius: 12px;
-    margin-bottom: 10px;
-}
-.suggestion-btn button {
-    background: #1f2937;
-    border-radius: 20px;
-    color: white;
+    padding: 12px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -39,8 +43,8 @@ body {
 # HEADER
 # ======================
 
-st.markdown("# 🧠 ResearchMind AI")
-st.caption("Think • Explore • Understand")
+st.title("🧠 ResearchMind AI")
+st.caption("Explore knowledge with AI")
 
 # ======================
 # MEMORY
@@ -58,31 +62,10 @@ for msg in st.session_state.messages:
         st.markdown(msg["content"])
 
 # ======================
-# SUGGESTIONS
-# ======================
-
-st.markdown("### 💡 Try asking:")
-
-suggestions = [
-    "Explain quantum computing simply",
-    "Future of AI in 2030",
-    "How fusion energy works",
-]
-
-cols = st.columns(len(suggestions))
-for i, s in enumerate(suggestions):
-    with cols[i]:
-        if st.button(s):
-            st.session_state["quick"] = s
-
-# ======================
-# INPUT (CHAT + VOICE)
+# INPUT
 # ======================
 
 user_input = st.chat_input("Ask anything...")
-
-if "quick" in st.session_state:
-    user_input = st.session_state.pop("quick")
 
 # ======================
 # HELPERS
@@ -97,7 +80,7 @@ def stream_text(text):
     for ch in text:
         output += ch
         placeholder.markdown(output)
-        time.sleep(0.003)
+        time.sleep(0.002)
     return output
 
 # ======================
@@ -107,116 +90,87 @@ def stream_text(text):
 if user_input:
 
     try:
-        st.session_state.messages.append({"role": "user", "content": user_input})
+        # Save user message
+        st.session_state.messages.append({
+            "role": "user",
+            "content": user_input
+        })
 
         with st.chat_message("user"):
             st.markdown(user_input)
 
-        is_research = len(user_input.split()) > 5
-
         with st.chat_message("assistant"):
 
-            # ======================
-            # CHAT MODE
-            # ======================
-            if not is_research:
+            # Progress
+            progress = st.progress(0)
 
-                history = "\n".join(
-                    [f"{m['role']}: {m['content']}" for m in st.session_state.messages[-6:]]
-                )
+            # -------- FIELD --------
+            field = detect_field(user_input)
+            progress.progress(10)
 
-                response = chat_chain.invoke({
-                    "history": history,
-                    "input": user_input
-                })
+            st.markdown(f"### 🏷️ Field: `{field}`")
 
-                final = stream_text(response)
+            # -------- SEARCH --------
+            search_data = run_search(user_input)
+            progress.progress(30)
 
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": final
-                })
+            # -------- VISUALS --------
+            images = run_images(user_input)
+            video = run_videos(user_input)
 
-                # FOLLOW-UP SUGGESTIONS
-                st.markdown("### 🔁 Follow-up")
-                followups = [
-                    "Explain in simple terms",
-                    "Give real-world examples",
-                    "Summarize briefly"
-                ]
+            # -------- SCRAPE --------
+            reader_text, urls = run_reader(search_data)
+            progress.progress(60)
 
-                cols = st.columns(3)
-                for i, f in enumerate(followups):
-                    with cols[i]:
-                        if st.button(f, key=f):
-                            st.session_state["quick"] = f
+            # -------- INSIGHT PANEL --------
+            st.markdown("## 🧠 Insights")
 
-            # ======================
-            # RESEARCH MODE
-            # ======================
-            else:
+            col1, col2 = st.columns([2,1])
 
-                progress = st.progress(0)
+            with col1:
+                if images:
+                    st.image(images[0], use_container_width=True)
 
-                field = detect_field(user_input)
-                progress.progress(10)
+            with col2:
+                st.markdown("### 🎥 Learn")
+                st.markdown(f"[▶ Watch Video]({video})")
 
-                st.markdown(f"### 🏷️ Field: `{field}`")
+            # -------- SOURCES --------
+            with st.expander("🔗 Sources"):
+                for u in urls:
+                    st.write(u)
 
-                search_data = run_search(user_input)
-                progress.progress(30)
+            # -------- REPORT --------
+            report = writer_chain.invoke({
+                "topic": user_input,
+                "research_data": safe(reader_text),
+                "field": field
+            })
 
-                images = run_images(user_input)
-                video = run_videos(user_input)
+            progress.progress(85)
 
-                reader_text, urls = run_reader(search_data)
-                progress.progress(60)
+            st.markdown("## 📘 Report")
+            final_report = stream_text(report)
 
-                # SMART CARD UI
-                st.markdown("## 🧠 Insights Panel")
+            # Download
+            st.download_button("⬇ Download Report", report)
 
-                col1, col2 = st.columns([2,1])
+            # -------- REVIEW --------
+            review = critic_chain.invoke({
+                "report": safe(report)
+            })
 
-                with col1:
-                    if images:
-                        st.image(images[0], use_container_width=True)
+            progress.progress(100)
 
-                with col2:
-                    st.markdown("### 🎥 Learn")
-                    st.markdown(f"[▶ Watch Video]({video})")
+            st.markdown("## 📊 Evaluation")
+            st.markdown(review)
 
-                # SOURCES
-                with st.expander("🔗 Sources"):
-                    for u in urls:
-                        st.write(u)
-
-                report = writer_chain.invoke({
-                    "topic": user_input,
-                    "research_data": safe(reader_text),
-                    "field": field
-                })
-
-                progress.progress(85)
-
-                st.markdown("## 📘 Report")
-                st.markdown(report)
-
-                st.download_button("⬇ Download", report)
-
-                review = critic_chain.invoke({
-                    "report": safe(report)
-                })
-
-                progress.progress(100)
-
-                st.markdown("## 📊 Evaluation")
-                st.markdown(review)
-
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": report
-                })
+        # Save assistant response
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": report
+        })
 
     except Exception:
-        st.error("❌ Error")
+        st.error("❌ Something went wrong")
         st.code(traceback.format_exc())
