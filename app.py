@@ -17,7 +17,7 @@ st.set_page_config(page_title="ResearchMind AI", page_icon="🧠")
 st.title("🧠 ResearchMind AI")
 
 # ======================
-# SESSION MEMORY
+# SESSION
 # ======================
 
 if "messages" not in st.session_state:
@@ -62,7 +62,7 @@ def plot_chart(data):
 if user_input:
 
     try:
-        # Save user message
+        # Save user msg
         st.session_state.messages.append({
             "role": "user",
             "content": user_input
@@ -73,37 +73,42 @@ if user_input:
 
         with st.chat_message("assistant"):
 
-            # Decide mode automatically
+            # Decide complexity
             is_complex = len(user_input.split()) > 5
 
             # ======================
-            # SIMPLE RESPONSE
+            # SIMPLE (CHATGPT STYLE)
             # ======================
             if not is_complex:
-                st.markdown("💬 Try asking a detailed research question.")
+
+                response = writer_chain.invoke({
+                    "topic": user_input,
+                    "research_data": "Explain simply with examples"
+                })
+
+                st.markdown(response)
 
                 st.session_state.messages.append({
                     "role": "assistant",
-                    "content": "Please ask a more detailed query."
+                    "content": response
                 })
 
             # ======================
-            # RESEARCH FLOW
+            # FULL RESEARCH MODE
             # ======================
             else:
+
                 st.markdown("🔍 Searching...")
                 search_data = run_search(user_input)
 
-                st.markdown("📄 Reading sources...")
+                st.markdown("📄 Reading...")
                 reader_text, urls = run_reader(search_data)
 
-                # SHOW SOURCES
                 with st.expander("🔗 Sources"):
                     for u in urls:
                         st.write(u)
 
-                # WRITE REPORT
-                st.markdown("✍️ Generating report...")
+                st.markdown("✍️ Writing report...")
                 report = writer_chain.invoke({
                     "topic": user_input,
                     "research_data": reader_text[:2000]
@@ -112,17 +117,16 @@ if user_input:
                 st.markdown("## 📘 Report")
                 st.markdown(report)
 
-                # ANALYTICS
+                # 📊 Analytics
                 st.markdown("## 📊 Insights")
-
                 keywords = get_keywords(reader_text)
                 plot_chart(keywords)
 
-                # CONTEXT
+                # 📰 Context
                 st.markdown("## 📰 Context")
                 st.write(reader_text[:400])
 
-                # REVIEW
+                # 🧠 Review
                 review = critic_chain.invoke({
                     "report": report
                 })
