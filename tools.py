@@ -1,8 +1,6 @@
 import streamlit as st
 from langchain.tools import tool
 from tavily import TavilyClient
-import requests
-from bs4 import BeautifulSoup
 
 # ======================
 # API KEY
@@ -21,7 +19,7 @@ tavily = TavilyClient(api_key=TAVILY_API_KEY)
 
 @tool
 def web_search(query: str) -> str:
-    """Search the web and return top results."""
+    """Search the web and return results."""
     try:
         res = tavily.search(query=query, max_results=5)
         results = []
@@ -36,21 +34,6 @@ def web_search(query: str) -> str:
 
 
 @tool
-def scrape_url(url: str) -> str:
-    """Scrape text content from a URL."""
-    try:
-        headers = {"User-Agent": "Mozilla/5.0"}
-        res = requests.get(url, headers=headers, timeout=10)
-
-        soup = BeautifulSoup(res.text, "html.parser")
-
-        for s in soup(["script", "style"]):
-            s.extract()
-
-        text = soup.get_text()
-        clean = "\n".join([t.strip() for t in text.splitlines() if t.strip()])
-
-        return clean[:3000]
-
-    except Exception as e:
-        return f"Error: {e}"
+def scrape_url(data: str) -> str:
+    """Process text (temporary reader)."""
+    return data[:3000]
