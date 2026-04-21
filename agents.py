@@ -5,19 +5,20 @@ from langchain_core.output_parsers import StrOutputParser
 from tools import web_search, scrape_url
 
 # ======================
-# LLM CONFIG (UPDATED)
+# LLM CONFIG (LATEST WORKING)
 # ======================
 
 def get_llm():
     api_key = st.secrets.get("GROQ_API_KEY")
+
     if not api_key:
         raise ValueError("GROQ_API_KEY missing")
 
-    # ✅ Use currently supported model
     return ChatGroq(
         groq_api_key=api_key,
-        model_name="llama3-8b-8192",
-        temperature=0.3
+        model_name="llama-3.1-8b-instant",  # ✅ CURRENT WORKING MODEL
+        temperature=0.3,
+        max_tokens=1024  # keep safe to avoid overflow
     )
 
 llm = get_llm()
