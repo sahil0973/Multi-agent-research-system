@@ -1,7 +1,7 @@
 import streamlit as st
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
-from langchain.chains import LLMChain
+from langchain_core.output_parsers import StrOutputParser
 from langchain.agents import initialize_agent, AgentType
 from tools import web_search, scrape_url
 
@@ -11,15 +11,13 @@ from tools import web_search, scrape_url
 
 def get_llm():
     api_key = st.secrets.get("GROQ_API_KEY")
-
     if not api_key:
-        raise ValueError("GROQ_API_KEY not found in Streamlit secrets")
+        raise ValueError("GROQ_API_KEY not found")
 
     return ChatGroq(
         groq_api_key=api_key,
         model_name="llama3-70b-8192",
-        temperature=0.3,
-        max_tokens=2048
+        temperature=0.3
     )
 
 # ======================
@@ -27,32 +25,24 @@ def get_llm():
 # ======================
 
 def build_search_agent():
-    llm = get_llm()
-
-    agent = initialize_agent(
+    return initialize_agent(
         tools=[web_search],
-        llm=llm,
+        llm=get_llm(),
         agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
         verbose=True
     )
-
-    return agent
 
 # ======================
 # READER AGENT
 # ======================
 
 def build_reader_agent():
-    llm = get_llm()
-
-    agent = initialize_agent(
+    return initialize_agent(
         tools=[scrape_url],
-        llm=llm,
+        llm=get_llm(),
         agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
         verbose=True
     )
-
-    return agent
 
 # ======================
 # WRITER CHAIN
@@ -61,36 +51,30 @@ def build_reader_agent():
 writer_prompt = ChatPromptTemplate.from_template("""
 You are a professional research writer.
 
-Write a detailed research report.
-
 Topic:
 {topic}
 
 Research Data:
 {research_data}
 
-Instructions:
-- Clear introduction
-- Use headings
+Write a detailed report with:
+- Introduction
+- Headings
 - Deep explanation
-- Add insights
-- Conclusion at end
+- Insights
+- Conclusion
 """)
 
-writer_chain = LLMChain(
-    llm=get_llm(),
-    prompt=writer_prompt
-)
+writer_chain = writer_prompt | get_llm() | StrOutputParser()
 
 # ======================
 # CRITIC CHAIN
 # ======================
 
 critic_prompt = ChatPromptTemplate.from_template("""
-You are a strict research critic.
+You are a strict critic.
 
-Review the report below:
-
+Report:
 {report}
 
 Evaluate:
@@ -99,13 +83,10 @@ Evaluate:
 - Depth
 - Structure
 
-Provide:
-1. Score (out of 10)
+Give:
+1. Score /10
 2. Improvements
-3. Final verdict
+3. Verdict
 """)
 
-critic_chain = LLMChain(
-    llm=get_llm(),
-    prompt=critic_prompt
-)
+critic_chain = critic_prompt | get_llm() | StrOutputParser()
