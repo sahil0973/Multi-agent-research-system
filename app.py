@@ -1,176 +1,89 @@
 import streamlit as st
 import traceback
-import time
 
 from agents import (
     run_search,
     run_reader,
     writer_chain,
     critic_chain,
-    run_images,
-    run_videos,
-    detect_field
+    run_multi_agent
 )
 
-# ======================
-# CONFIG
-# ======================
-
-st.set_page_config(
-    page_title="ResearchMind AI",
-    page_icon="🧠",
-    layout="wide"
-)
-
-# ======================
-# STYLE
-# ======================
-
-st.markdown("""
-<style>
-body {
-    background-color: #0e1117;
-    color: white;
-}
-.stChatMessage {
-    border-radius: 12px;
-    padding: 12px;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# ======================
-# HEADER
-# ======================
+st.set_page_config(page_title="ResearchMind AI", page_icon="🧠")
 
 st.title("🧠 ResearchMind AI")
-st.caption("Explore knowledge with AI")
 
 # ======================
-# MEMORY
+# MODE
 # ======================
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+mode = st.selectbox("Mode", ["Chat", "Research", "Multi-Agent"])
+
+topic = st.text_input("Enter topic")
 
 # ======================
-# DISPLAY CHAT
+# RUN
 # ======================
 
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
-
-# ======================
-# INPUT
-# ======================
-
-user_input = st.chat_input("Ask anything...")
-
-# ======================
-# HELPERS
-# ======================
-
-def safe(text, n=2000):
-    return text[:n] if text else ""
-
-def stream_text(text):
-    placeholder = st.empty()
-    output = ""
-    for ch in text:
-        output += ch
-        placeholder.markdown(output)
-        time.sleep(0.002)
-    return output
-
-# ======================
-# MAIN LOGIC
-# ======================
-
-if user_input:
+if st.button("Run") and topic:
 
     try:
-        # Save user message
-        st.session_state.messages.append({
-            "role": "user",
-            "content": user_input
-        })
 
-        with st.chat_message("user"):
-            st.markdown(user_input)
+        # ======================
+        # CHAT MODE
+        # ======================
+        if mode == "Chat":
+            st.write("💬 Chat mode (basic response)")
+            st.write("Use Research or Multi-Agent for full features")
 
-        with st.chat_message("assistant"):
+        # ======================
+        # RESEARCH MODE
+        # ======================
+        elif mode == "Research":
 
-            # Progress
-            progress = st.progress(0)
+            st.info("🔍 Searching...")
+            search_data = run_search(topic)
 
-            # -------- FIELD --------
-            field = detect_field(user_input)
-            progress.progress(10)
-
-            st.markdown(f"### 🏷️ Field: `{field}`")
-
-            # -------- SEARCH --------
-            search_data = run_search(user_input)
-            progress.progress(30)
-
-            # -------- VISUALS --------
-            images = run_images(user_input)
-            video = run_videos(user_input)
-
-            # -------- SCRAPE --------
+            st.info("📄 Reading...")
             reader_text, urls = run_reader(search_data)
-            progress.progress(60)
 
-            # -------- INSIGHT PANEL --------
-            st.markdown("## 🧠 Insights")
-
-            col1, col2 = st.columns([2,1])
-
-            with col1:
-                if images:
-                    st.image(images[0], use_container_width=True)
-
-            with col2:
-                st.markdown("### 🎥 Learn")
-                st.markdown(f"[▶ Watch Video]({video})")
-
-            # -------- SOURCES --------
-            with st.expander("🔗 Sources"):
-                for u in urls:
-                    st.write(u)
-
-            # -------- REPORT --------
+            st.info("✍️ Writing...")
             report = writer_chain.invoke({
-                "topic": user_input,
-                "research_data": safe(reader_text),
-                "field": field
+                "topic": topic,
+                "research_data": reader_text[:2000]
             })
 
-            progress.progress(85)
+            st.subheader("📘 Report")
+            st.write(report)
 
-            st.markdown("## 📘 Report")
-            final_report = stream_text(report)
-
-            # Download
-            st.download_button("⬇ Download Report", report)
-
-            # -------- REVIEW --------
+            st.info("🧠 Reviewing...")
             review = critic_chain.invoke({
-                "report": safe(report)
+                "report": report
             })
 
-            progress.progress(100)
+            st.subheader("📊 Review")
+            st.write(review)
 
-            st.markdown("## 📊 Evaluation")
-            st.markdown(review)
+        # ======================
+        # MULTI-AGENT MODE
+        # ======================
+        elif mode == "Multi-Agent":
 
-        # Save assistant response
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": report
-        })
+            st.info("🤖 Running multi-agent system...")
+
+            plan, data, result = run_multi_agent(topic)
+
+            st.subheader("🧠 Plan")
+            st.write(plan)
+
+            st.subheader("🔍 Research Data")
+            st.write(data[:1500])
+
+            st.subheader("📘 Final Output")
+            st.write(result)
+
+            st.success("✅ Completed")
 
     except Exception:
-        st.error("❌ Something went wrong")
+        st.error("❌ Error occurred")
         st.code(traceback.format_exc())
