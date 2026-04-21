@@ -1,18 +1,23 @@
 import streamlit as st
 from langchain_groq import ChatGroq
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains import LLMChain
 from langchain.agents import initialize_agent, AgentType
 from tools import web_search, scrape_url
 
 # ======================
-# LLM CONFIG (FIXED)
+# LLM CONFIG
 # ======================
 
 def get_llm():
+    api_key = st.secrets.get("GROQ_API_KEY")
+
+    if not api_key:
+        raise ValueError("GROQ_API_KEY not found in Streamlit secrets")
+
     return ChatGroq(
-        groq_api_key=st.secrets.get("GROQ_API_KEY"),
-        model_name="llama3-70b-8192",   # ✅ stable model
+        groq_api_key=api_key,
+        model_name="llama3-70b-8192",
         temperature=0.3,
         max_tokens=2048
     )
@@ -24,17 +29,14 @@ def get_llm():
 def build_search_agent():
     llm = get_llm()
 
-    tools = [web_search]
-
     agent = initialize_agent(
-        tools=tools,
+        tools=[web_search],
         llm=llm,
         agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
         verbose=True
     )
 
     return agent
-
 
 # ======================
 # READER AGENT
@@ -43,10 +45,8 @@ def build_search_agent():
 def build_reader_agent():
     llm = get_llm()
 
-    tools = [scrape_url]
-
     agent = initialize_agent(
-        tools=tools,
+        tools=[scrape_url],
         llm=llm,
         agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
         verbose=True
@@ -54,70 +54,58 @@ def build_reader_agent():
 
     return agent
 
-
 # ======================
 # WRITER CHAIN
 # ======================
 
-def build_writer_chain():
-    llm = get_llm()
-
-    prompt = ChatPromptTemplate.from_template("""
+writer_prompt = ChatPromptTemplate.from_template("""
 You are a professional research writer.
 
-Using the following gathered information, write a well-structured research report.
+Write a detailed research report.
 
 Topic:
 {topic}
 
-Information:
+Research Data:
 {research_data}
 
-Requirements:
+Instructions:
 - Clear introduction
-- Detailed explanation
 - Use headings
-- Provide insights
+- Deep explanation
+- Add insights
 - Conclusion at end
 """)
 
-    chain = LLMChain(
-        llm=llm,
-        prompt=prompt
-    )
-
-    return chain
-
+writer_chain = LLMChain(
+    llm=get_llm(),
+    prompt=writer_prompt
+)
 
 # ======================
 # CRITIC CHAIN
 # ======================
 
-def build_critic_chain():
-    llm = get_llm()
-
-    prompt = ChatPromptTemplate.from_template("""
+critic_prompt = ChatPromptTemplate.from_template("""
 You are a strict research critic.
 
-Review the following report:
+Review the report below:
 
 {report}
 
-Evaluate on:
+Evaluate:
 - Accuracy
 - Clarity
 - Depth
 - Structure
 
-Give:
-1. Score out of 10
+Provide:
+1. Score (out of 10)
 2. Improvements
 3. Final verdict
 """)
 
-    chain = LLMChain(
-        llm=llm,
-        prompt=prompt
-    )
-
-    return chain
+critic_chain = LLMChain(
+    llm=get_llm(),
+    prompt=critic_prompt
+)
