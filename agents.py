@@ -1,76 +1,94 @@
+import streamlit as st
 from langchain.agents import create_agent
-from langchain_google_genai import ChatGoogleGenerativeAI
-llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from tools import web_search , scrape_url 
-from dotenv import load_dotenv
 
-load_dotenv()
+# 🔁 Choose: "groq" | "gemini"
+PROVIDER = "groq"
 
+# ======================
+# LLM SETUP
+# ======================
 
-#1st agent 
-def build_search_agent():
-    return create_agent(
-        model = llm,
-        tools= [web_search]
+if PROVIDER == "groq":
+    from langchain_groq import ChatGroq
+
+    llm = ChatGroq(
+        model="llama3-70b-8192",
+        temperature=0,
+        api_key=st.secrets["GROQ_API_KEY"]
     )
 
-#2nd agent 
+elif PROVIDER == "gemini":
+    from langchain_google_genai import ChatGoogleGenerativeAI
+
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-1.5-flash",
+        temperature=0,
+        google_api_key=st.secrets["GOOGLE_API_KEY"]
+    )
+
+# ======================
+# TOOLS
+# ======================
+
+from tools import web_search, scrape_url
+
+# ======================
+# AGENTS
+# ======================
+
+def build_search_agent():
+    return create_agent(
+        model=llm,
+        tools=[web_search],
+        system_prompt="""
+Find 3–5 reliable sources.
+Return URLs with short descriptions.
+Avoid repetition.
+"""
+    )
 
 def build_reader_agent():
     return create_agent(
-        model = llm,
-        tools = [scrape_url]
+        model=llm,
+        tools=[scrape_url],
+        system_prompt="""
+Extract key insights from URL.
+Keep concise and factual.
+"""
     )
 
-
-#writer chain 
+# ======================
+# WRITER
+# ======================
 
 writer_prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are an expert research writer. Write clear, structured and insightful reports."),
-    ("human", """Write a detailed research report on the topic below.
+    ("system", "You are a research writer."),
+    ("human", """Topic: {topic}
 
-Topic: {topic}
-
-Research Gathered:
+Research:
 {research}
 
-Structure the report as:
+Write:
 - Introduction
-- Key Findings (minimum 3 well-explained points)
+- Key Findings
 - Conclusion
-- Sources (list all URLs found in the research)
-
-Be detailed, factual and professional."""),
+- Sources"""),
 ])
 
 writer_chain = writer_prompt | llm | StrOutputParser()
 
-#critic_chain 
+# ======================
+# CRITIC
+# ======================
 
 critic_prompt = ChatPromptTemplate.from_messages([
-     ("system", "You are a sharp and constructive research critic. Be honest and specific."),
-    ("human", """Review the research report below and evaluate it strictly.
+    ("system", "You are a strict critic."),
+    ("human", """{report}
 
-Report:
-{report}
-
-Respond in this exact format:
-
-Score: X/10
-
-Strengths:
-- ...
-- ...
-
-Areas to Improve:
-- ...
-- ...
-
-One line verdict:
-..."""),
+Give:
+Score, strengths, weaknesses, verdict"""),
 ])
 
 critic_chain = critic_prompt | llm | StrOutputParser()
-
