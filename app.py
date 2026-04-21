@@ -1,63 +1,50 @@
 import streamlit as st
-import time
+import traceback
 
 from agents import (
-    build_search_agent,
-    build_reader_agent,
+    run_search,
+    run_reader,
     writer_chain,
     critic_chain
 )
 
-st.set_page_config(page_title="ResearchMind", page_icon="🔬", layout="wide")
+st.set_page_config(page_title="ResearchMind", page_icon="🔬")
 
 st.title("🔬 ResearchMind")
-st.caption("Multi-Agent AI Research System")
+st.caption("Fast Multi-Step AI Research System")
 
 topic = st.text_input("Enter Topic")
 
 if st.button("Run") and topic:
 
     try:
-        # SEARCH
-        st.info("Searching...")
-        search_agent = build_search_agent()
-        search_result = search_agent.run(
-            f"Find detailed and recent info about: {topic}"
-        )
-
+        st.info("🔍 Searching...")
+        search_result = run_search(topic)
         st.success("Search Done")
 
-        # READER
-        st.info("Reading...")
-        reader_agent = build_reader_agent()
-        reader_result = reader_agent.run(search_result)
+        st.info("📄 Processing...")
+        reader_result = run_reader(search_result[:1000])
+        st.success("Processing Done")
 
-        st.success("Reading Done")
-
-        # WRITER
-        st.info("Writing...")
-
+        st.info("✍️ Writing...")
         report = writer_chain.invoke({
             "topic": topic,
-            "research_data": reader_result[:3000]
+            "research_data": reader_result
         })
 
-        st.subheader("Report")
+        st.subheader("📘 Report")
         st.write(report)
 
-        # CRITIC
-        st.info("Reviewing...")
-
+        st.info("🧠 Reviewing...")
         review = critic_chain.invoke({
-            "report": report[:3000]
+            "report": report
         })
 
-        st.subheader("Review")
+        st.subheader("📊 Review")
         st.write(review)
 
-        st.success("Done ✅")
+        st.success("✅ Completed")
 
-    except Exception as e:
-        import traceback
-        st.error("Error occurred")
+    except Exception:
+        st.error("❌ Error occurred")
         st.code(traceback.format_exc())
