@@ -8,109 +8,56 @@ from agents import (
     critic_chain
 )
 
-# ======================
-# PAGE CONFIG
-# ======================
-
-st.set_page_config(
-    page_title="ResearchMind · Multi-Agent AI",
-    page_icon="🔬",
-    layout="wide"
-)
+st.set_page_config(page_title="ResearchMind", page_icon="🔬", layout="wide")
 
 st.title("🔬 ResearchMind")
-st.caption("Multi-Agent AI System for Research Automation")
+st.caption("Multi-Agent AI Research System")
 
-# ======================
-# INPUT
-# ======================
+topic = st.text_input("Enter Topic")
 
-topic = st.text_input("Enter Research Topic", placeholder="e.g. LLM agents 2025")
-
-run_btn = st.button("Run Research")
-
-# ======================
-# PIPELINE UI
-# ======================
-
-col1, col2, col3, col4 = st.columns(4)
-
-with col1:
-    search_status = st.empty()
-
-with col2:
-    reader_status = st.empty()
-
-with col3:
-    writer_status = st.empty()
-
-with col4:
-    critic_status = st.empty()
-
-# ======================
-# RUN PIPELINE
-# ======================
-
-if run_btn and topic:
+if st.button("Run") and topic:
 
     try:
-        # -------- SEARCH --------
-        search_status.info("🔍 Searching...")
+        # SEARCH
+        st.info("Searching...")
         search_agent = build_search_agent()
-
         search_result = search_agent.run(
-            f"Find recent, reliable and detailed information about: {topic}"
+            f"Find detailed and recent info about: {topic}"
         )
 
-        search_status.success("✅ Search Done")
+        st.success("Search Done")
 
-        time.sleep(1)
-
-        # -------- READER --------
-        reader_status.info("📄 Reading content...")
+        # READER
+        st.info("Reading...")
         reader_agent = build_reader_agent()
-
-        # NOTE: For now passing search_result directly
-        # (you can later extract URLs for better pipeline)
         reader_result = reader_agent.run(search_result)
 
-        reader_status.success("✅ Reading Done")
+        st.success("Reading Done")
 
-        time.sleep(1)
+        # WRITER
+        st.info("Writing...")
 
-        # -------- WRITER --------
-        writer_status.info("✍️ Writing report...")
-
-        report = writer_chain.run({
+        report = writer_chain.invoke({
             "topic": topic,
-            "research_data": reader_result[:3000]  # limit tokens
+            "research_data": reader_result[:3000]
         })
 
-        writer_status.success("✅ Report Ready")
-
-        # -------- SHOW REPORT --------
-        st.subheader("📘 Research Report")
+        st.subheader("Report")
         st.write(report)
 
-        time.sleep(1)
+        # CRITIC
+        st.info("Reviewing...")
 
-        # -------- CRITIC --------
-        critic_status.info("🧠 Reviewing...")
-
-        review = critic_chain.run({
+        review = critic_chain.invoke({
             "report": report[:3000]
         })
 
-        critic_status.success("✅ Review Done")
-
-        # -------- SHOW REVIEW --------
-        st.subheader("📊 Critic Review")
+        st.subheader("Review")
         st.write(review)
+
+        st.success("Done ✅")
 
     except Exception as e:
         import traceback
-        st.error("❌ Error occurred")
+        st.error("Error occurred")
         st.code(traceback.format_exc())
-
-else:
-    st.info("Enter a topic and click 'Run Research'")
