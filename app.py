@@ -1,5 +1,8 @@
 import streamlit as st
 import traceback
+import matplotlib.pyplot as plt
+from collections import Counter
+import re
 
 from agents import (
     run_search,
@@ -14,75 +17,125 @@ st.set_page_config(page_title="ResearchMind AI", page_icon="🧠")
 st.title("🧠 ResearchMind AI")
 
 # ======================
-# MODE
+# SESSION MEMORY
 # ======================
 
-mode = st.selectbox("Mode", ["Chat", "Research", "Multi-Agent"])
-
-topic = st.text_input("Enter topic")
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
 # ======================
-# RUN
+# DISPLAY CHAT
 # ======================
 
-if st.button("Run") and topic:
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# ======================
+# INPUT
+# ======================
+
+user_input = st.chat_input("Ask anything...")
+
+# ======================
+# HELPERS
+# ======================
+
+def get_keywords(text):
+    words = re.findall(r'\b[a-zA-Z]{4,}\b', text.lower())
+    return Counter(words).most_common(8)
+
+def plot_chart(data):
+    labels = [x[0] for x in data]
+    values = [x[1] for x in data]
+
+    fig, ax = plt.subplots()
+    ax.bar(labels, values)
+    plt.xticks(rotation=45)
+
+    st.pyplot(fig)
+
+# ======================
+# MAIN LOGIC
+# ======================
+
+if user_input:
 
     try:
+        # Save user message
+        st.session_state.messages.append({
+            "role": "user",
+            "content": user_input
+        })
 
-        # ======================
-        # CHAT MODE
-        # ======================
-        if mode == "Chat":
-            st.write("💬 Chat mode (basic response)")
-            st.write("Use Research or Multi-Agent for full features")
+        with st.chat_message("user"):
+            st.markdown(user_input)
 
-        # ======================
-        # RESEARCH MODE
-        # ======================
-        elif mode == "Research":
+        with st.chat_message("assistant"):
 
-            st.info("🔍 Searching...")
-            search_data = run_search(topic)
+            # Decide mode automatically
+            is_complex = len(user_input.split()) > 5
 
-            st.info("📄 Reading...")
-            reader_text, urls = run_reader(search_data)
+            # ======================
+            # SIMPLE RESPONSE
+            # ======================
+            if not is_complex:
+                st.markdown("💬 Try asking a detailed research question.")
 
-            st.info("✍️ Writing...")
-            report = writer_chain.invoke({
-                "topic": topic,
-                "research_data": reader_text[:2000]
-            })
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": "Please ask a more detailed query."
+                })
 
-            st.subheader("📘 Report")
-            st.write(report)
+            # ======================
+            # RESEARCH FLOW
+            # ======================
+            else:
+                st.markdown("🔍 Searching...")
+                search_data = run_search(user_input)
 
-            st.info("🧠 Reviewing...")
-            review = critic_chain.invoke({
-                "report": report
-            })
+                st.markdown("📄 Reading sources...")
+                reader_text, urls = run_reader(search_data)
 
-            st.subheader("📊 Review")
-            st.write(review)
+                # SHOW SOURCES
+                with st.expander("🔗 Sources"):
+                    for u in urls:
+                        st.write(u)
 
-        # ======================
-        # MULTI-AGENT MODE
-        # ======================
-        elif mode == "Multi-Agent":
+                # WRITE REPORT
+                st.markdown("✍️ Generating report...")
+                report = writer_chain.invoke({
+                    "topic": user_input,
+                    "research_data": reader_text[:2000]
+                })
 
-            st.info("🤖 Running multi-agent system...")
+                st.markdown("## 📘 Report")
+                st.markdown(report)
 
-            plan, data, result = run_multi_agent(topic)
+                # ANALYTICS
+                st.markdown("## 📊 Insights")
 
-            st.subheader("🧠 Plan")
-            st.write(plan)
+                keywords = get_keywords(reader_text)
+                plot_chart(keywords)
 
-            st.subheader("🔍 Research Data")
-            st.write(data[:1500])
+                # CONTEXT
+                st.markdown("## 📰 Context")
+                st.write(reader_text[:400])
 
-            st.subheader("📘 Final Output")
-            st.write(result)
+                # REVIEW
+                review = critic_chain.invoke({
+                    "report": report
+                })
 
-            st.success("✅ Completed")
+                st.markdown("## 📊 Evaluation")
+                st.markdown(review)
+
+                st.download_button("⬇ Download Report", report)
+
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": report
+                })
 
     except Exception:
         st.error("❌ Error occurred")
